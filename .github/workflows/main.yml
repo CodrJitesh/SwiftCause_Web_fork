@@ -21,7 +21,7 @@ jobs:
 
       - name: Add upstream
         run: |
-          git remote add upstream https://github.com/YNVSolutions/SwiftCause_Web
+          git remote add upstream https://github.com/YNVSolutions/SwiftCause_Web.git
           git fetch upstream
           git merge upstream/main --allow-unrelated-histories || true
 
