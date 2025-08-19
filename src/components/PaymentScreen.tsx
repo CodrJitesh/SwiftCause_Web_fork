@@ -1,30 +1,21 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
-import { ArrowLeft, CreditCard, Shield, Lock } from 'lucide-react';
+import { ArrowLeft, CreditCard, Shield, Lock, CreditCard as CreditCardIcon } from 'lucide-react';
 import { Campaign, Donation, PaymentResult } from '../App';
-import { ApiClient } from '../utils/supabase/client';
+import PaymentForm from './PaymentForm';
 
 interface PaymentScreenProps {
   campaign: Campaign;
   donation: Donation;
-  onPaymentComplete: (result: PaymentResult) => void;
+  isProcessing: boolean;
+  error: string | null;
+  handlePaymentSubmit: () => Promise<void>;
   onBack: () => void;
 }
 
-export function PaymentScreen({ campaign, donation, onPaymentComplete, onBack }: PaymentScreenProps) {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('card');
-  const [cardData, setCardData] = useState({
-    number: '',
-    expiry: '',
-    cvv: '',
-    name: ''
-  });
+export function PaymentScreen({ campaign, donation, isProcessing, error, handlePaymentSubmit, onBack }: PaymentScreenProps) {
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -32,74 +23,6 @@ export function PaymentScreen({ campaign, donation, onPaymentComplete, onBack }:
       currency: 'USD',
       minimumFractionDigits: 2
     }).format(amount);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsProcessing(true);
-
-    try {
-      // Simulate payment processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // In a real app, you would process payment with a payment provider here
-      // For demo purposes, we'll simulate a 95% success rate
-      const success = Math.random() > 0.05;
-      
-      if (success) {
-        // Submit donation to Supabase
-        const result = await ApiClient.createDonation({
-          ...donation,
-          donorName: cardData.name,
-          paymentMethod: paymentMethod === 'card' ? 'Credit Card' : 
-                        paymentMethod === 'paypal' ? 'PayPal' : 'Bank Transfer'
-        });
-        
-        if (result.success) {
-          onPaymentComplete({
-            success: true,
-            transactionId: result.transactionId
-          });
-        } else {
-          throw new Error('Failed to process donation');
-        }
-      } else {
-        throw new Error('Payment processing failed');
-      }
-    } catch (error) {
-      console.error('Payment processing error:', error);
-      onPaymentComplete({
-        success: false,
-        error: error instanceof Error ? error.message : 'Payment processing failed. Please try again.'
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = matches && matches[0] || '';
-    const parts = [];
-
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-
-    if (parts.length) {
-      return parts.join(' ');
-    } else {
-      return v;
-    }
-  };
-
-  const formatExpiry = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    if (v.length >= 2) {
-      return v.substring(0, 2) + '/' + v.substring(2, 4);
-    }
-    return v;
   };
 
   return (
@@ -130,117 +53,26 @@ export function PaymentScreen({ campaign, donation, onPaymentComplete, onBack }:
             </CardHeader>
             
             <CardContent className="p-3 sm:p-6 pt-0">
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="paymentMethod" className="text-sm sm:text-base">Payment Method</Label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger className="h-11 sm:h-12">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="card">Credit/Debit Card</SelectItem>
-                      <SelectItem value="paypal">PayPal</SelectItem>
-                      <SelectItem value="bank">Bank Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <p className="text-sm sm:text-base font-medium mb-2">Select Payment Method</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Card 
+                      className={`cursor-pointer border-primary ring-2 ring-primary`}
+                    >
+                      <CardContent className="flex flex-col items-center justify-center p-4">
+                        <CreditCardIcon className="h-8 w-8 mb-2" />
+                        <span className="text-sm font-medium">Card</span>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
 
-                {paymentMethod === 'card' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="cardName" className="text-sm sm:text-base">Cardholder Name</Label>
-                      <Input
-                        id="cardName"
-                        type="text"
-                        placeholder="John Doe"
-                        value={cardData.name}
-                        onChange={(e) => setCardData(prev => ({ ...prev, name: e.target.value }))}
-                        required
-                        disabled={isProcessing}
-                        className="h-11 sm:h-12"
-                        autoComplete="cc-name"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="cardNumber" className="text-sm sm:text-base">Card Number</Label>
-                      <Input
-                        id="cardNumber"
-                        type="text"
-                        placeholder="1234 5678 9012 3456"
-                        value={cardData.number}
-                        onChange={(e) => setCardData(prev => ({ 
-                          ...prev, 
-                          number: formatCardNumber(e.target.value) 
-                        }))}
-                        maxLength={19}
-                        required
-                        disabled={isProcessing}
-                        className="h-11 sm:h-12"
-                        autoComplete="cc-number"
-                        inputMode="numeric"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="expiry" className="text-sm sm:text-base">Expiry Date</Label>
-                        <Input
-                          id="expiry"
-                          type="text"
-                          placeholder="MM/YY"
-                          value={cardData.expiry}
-                          onChange={(e) => setCardData(prev => ({ 
-                            ...prev, 
-                            expiry: formatExpiry(e.target.value) 
-                          }))}
-                          maxLength={5}
-                          required
-                          disabled={isProcessing}
-                          className="h-11 sm:h-12"
-                          autoComplete="cc-exp"
-                          inputMode="numeric"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="cvv" className="text-sm sm:text-base">CVV</Label>
-                        <Input
-                          id="cvv"
-                          type="text"
-                          placeholder="123"
-                          value={cardData.cvv}
-                          onChange={(e) => setCardData(prev => ({ 
-                            ...prev, 
-                            cvv: e.target.value.replace(/\D/g, '').substring(0, 4) 
-                          }))}
-                          maxLength={4}
-                          required
-                          disabled={isProcessing}
-                          className="h-11 sm:h-12"
-                          autoComplete="cc-csc"
-                          inputMode="numeric"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {paymentMethod === 'paypal' && (
-                  <div className="p-3 sm:p-4 border rounded-lg text-center">
-                    <p className="text-sm sm:text-base text-muted-foreground">
-                      You will be redirected to PayPal to complete your donation
-                    </p>
-                  </div>
-                )}
-
-                {paymentMethod === 'bank' && (
-                  <div className="p-3 sm:p-4 border rounded-lg text-center">
-                    <p className="text-sm sm:text-base text-muted-foreground">
-                      Bank transfer instructions will be provided after confirmation
-                    </p>
-                  </div>
-                )}
+                <PaymentForm 
+                  loading={isProcessing}
+                  error={error}
+                  onSubmit={handlePaymentSubmit}
+                />
 
                 <div className="flex items-start space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <Shield className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
@@ -249,25 +81,7 @@ export function PaymentScreen({ campaign, donation, onPaymentComplete, onBack }:
                   </span>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  disabled={isProcessing}
-                  size="lg" 
-                  className="w-full h-12 sm:h-14 text-sm sm:text-base"
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="mr-2 h-4 w-4" />
-                      Complete Donation
-                    </>
-                  )}
-                </Button>
-              </form>
+              </div>
             </CardContent>
           </Card>
 
@@ -301,17 +115,13 @@ export function PaymentScreen({ campaign, donation, onPaymentComplete, onBack }:
                   </div>
                 )}
                 
-                <div className="flex justify-between items-center">
-                  <span className="text-xs sm:text-sm text-muted-foreground">Processing Fee:</span>
-                  <span className="text-xs sm:text-sm">{formatCurrency(donation.amount * 0.029)}</span>
-                </div>
               </div>
               
               <hr />
               
               <div className="flex justify-between text-sm sm:text-lg">
                 <span>Total:</span>
-                <span>{formatCurrency(donation.amount + (donation.amount * 0.029))}</span>
+                <span>{formatCurrency(donation.amount)}</span>
               </div>
               
               <div className="text-xs sm:text-sm text-muted-foreground">
